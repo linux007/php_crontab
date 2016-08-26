@@ -52,7 +52,7 @@ class Admin {
 
     protected function api($uri) {
         info($uri, DEBUG);
-        $mysqli = new mysqli('127.0.0.1', 'root', 'cheyun@20140616', 'test');
+        $mysqli = new mysqli('127.0.0.1', 'root', '111111', 'test');
         $mysqli->set_charset('utf8');
         if ($mysqli->connect_error) {
             throw new RuntimeException('Mysql Connect Error:(' . mysqli_connect_errno() . ') '. mysqli_connect_error());
@@ -103,7 +103,7 @@ class Admin {
     }
 
     protected function admin($uri) {
-        $mysqli = new mysqli('127.0.0.1', 'root', 'cheyun@20140616', 'test');
+        $mysqli = new mysqli('127.0.0.1', 'root', '111111', 'test');
         $mysqli->set_charset('utf8');
         if (empty($uri)) {
             $uri = 'index';
