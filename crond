@@ -1,0 +1,87 @@
+#!/usr/bin/env php
+<?php
+/**
+ * Created by PhpStorm.
+ * User: yuyc
+ * Date: 2016/8/18
+ * Time: 18:05
+ */
+
+error_reporting(-1);
+
+$shortOpts = '';
+$shortOpts .= 'l:';   # the log path
+$shortOpts .= 'vhd';  # -v: debug -h: help -d: daemonize
+
+# longoption
+$longOpts = [
+    'debug',
+    'help',
+];
+$options = getopt($shortOpts, $longOpts);
+
+if (empty($options)) {
+    goto help;
+}
+
+# debug
+define('IS_DEBUG',  isset($options['debug']) || isset($options['v']));
+# log
+define('LOG_PATH',  isset($options['l']) && $options['l'] ? $options['l'] : null);
+# daemon
+define('IS_DAEMON', isset($options['d']));
+
+# log level
+define('INFO', 1);
+define('DEBUG', 2);
+define('WARN', 3);
+
+//todo
+include './lib/Server.php';
+$server = new Server();
+$server->start();
+
+info('hello world', INFO);
+return true;
+
+help:
+$sbinName = basename(__FILE__);
+echo <<<EOF
+    Usage: $sbinName [options]
+    -d            open daemonize mode
+    -l            the log path
+    -v, --debug   open debug mode
+    -h, --help    show help info
+
+EOF;
+exit;
+
+function info($info, $log_level = 1)
+{
+    switch ($log_level) {
+        case INFO:
+            $begin = "\x1b[33m";
+            $tag = 'info';
+            break;
+        case DEBUG:
+            $begin = "\x1b[34m";
+            $tag = 'debug';
+            break;
+        case WARN:
+            $begin = "\x1b[31m";
+            $tag = 'warn';
+    }
+    $end = "\x1b[39m";
+
+    $str = $begin . date('[Y-m-d H:i:s]') . " [$tag]{$end} - $info\n";
+    if (IS_DAEMON) {
+        file_put_contents(LOG_PATH, $str, FILE_APPEND);
+    } else {
+        echo $str;
+    }
+}
+
+
+
+
+
