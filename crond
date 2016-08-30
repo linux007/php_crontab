@@ -8,6 +8,7 @@
  */
 
 error_reporting(-1);
+define('ROOT', realpath(__DIR__));
 
 $shortOpts = '';
 $shortOpts .= 'l:';   # the log path
@@ -28,13 +29,24 @@ if (empty($options)) {
 define('IS_DEBUG',  isset($options['debug']) || isset($options['v']));
 # log
 define('LOG_PATH',  isset($options['l']) && $options['l'] ? $options['l'] : null);
+# config
+define('CONFIG_FILE', isset($options['c']) && $options['c'] ? $options['c'] : '/etc/crontab.ini');
 # daemon
 define('IS_DAEMON', isset($options['d']));
-
 # log level
 define('INFO', 1);
 define('DEBUG', 2);
 define('WARN', 3);
+
+if ( ! is_file(CONFIG_FILE) ) {
+    if ( !is_file(ROOT . '/crontab.ini.default') ) {
+        info('配置文件不存在', WARN);
+        return false;
+    }
+    if ( ! @copy(ROOT . '/crontab.ini.default', '/etc/crontab.ini') ) {
+        info('请使用root用户启动', WARN);
+    }
+}
 
 //todo
 include './lib/Server.php';

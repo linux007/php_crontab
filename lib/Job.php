@@ -33,8 +33,7 @@ class Job extends SplHeap {
             $job['starttime'] = $item;
             $this->insert(['time' => $item, 'job' => $job]);
         }
-
-        echo 'debug-' . $this->count() . PHP_EOL;
+//        echo 'debug-' . $this->count() . PHP_EOL;
     }
 
     /**

@@ -93,6 +93,19 @@
                     <input type='text' class='form-control' id='job-name'/><br />
                     <label>Command</label>
                     <input type='text' class='form-control' id='job-command' onkeyup="job_command = $(this).val(); job_string();"/><br />
+                    <label>HostName</label>
+                    <div class="row">
+                        <div class="col-md-12">
+                        <select class="form-control" id='job-name'>
+                            <option>127.0.0.1</option>
+                            <option>2</option>
+                            <option>3</option>
+                            <option>4</option>
+                            <option>5</option>
+                        </select>
+                        </div>
+                    </div><br />
+
 <!--                    <label>Quick Schedule</label><br />-->
 <!--                    <a class="btn btn-primary" onclick="schedule = '@reboot'; job_string();">Startup</a>-->
 <!--                    <a class="btn btn-primary" onclick="schedule = '@hourly'; job_string();">Hourly</a>-->
@@ -100,7 +113,6 @@
 <!--                    <a class="btn btn-primary" onclick="schedule = '@weekly'; job_string();">Weekly</a>-->
 <!--                    <a class="btn btn-primary" onclick="schedule = '@monthly'; job_string();">Monthly</a>-->
 <!--                    <a class="btn btn-primary" onclick="schedule = '@yearly'; job_string();">Yearly</a><br /><br />-->
-
                     <div class="row">
                         <div class="col-md-2">Second</div>
                         <div class="col-md-2">Minute</div>
@@ -116,7 +128,10 @@
                         <div class="col-md-2"><input type="text" class="form-control" id="job-day" value="*" onclick="this.select();"/></div>
                         <div class="col-md-2"><input type="text" class="form-control" id="job-month" value="*" onclick="this.select();"/></div>
                         <div class="col-md-2"><input type="text" class="form-control" id="job-week" value="*" onclick="this.select();"/></div>
-                        <div class="col-md-2"><a class="btn btn-primary" onclick="set_schedule();">Set</a></div>
+                    </div>
+                    <br />
+                    <div class="row">
+                        <div class="col-md-2 pull-right"><a class="btn btn-primary col-md-offset-4" onclick="set_schedule();">Set</a></div>
                     </div>
 
                     <br />

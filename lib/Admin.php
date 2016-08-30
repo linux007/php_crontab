@@ -10,11 +10,14 @@ class Admin {
     protected $request;
     protected $response;
 
+    protected $serConfig;
+
     public function __construct(swoole_server $server, $workerId)
     {
         $this->httpServer = $server;
         $this->wokerId = $workerId;
 
+        $this->servConfig = $server->servConfig;
     }
 
     public function onRequest(swoole_http_request $request, swoole_http_response $response) {
@@ -52,7 +55,7 @@ class Admin {
 
     protected function api($uri) {
         info($uri, DEBUG);
-        $mysqli = new mysqli('127.0.0.1', 'crontab', '123456', 'test');
+        $mysqli = new mysqli($this->servConfig['mysql']['host'], $this->servConfig['mysql']['username'], $this->servConfig['mysql']['password'], $this->servConfig['mysql']['dbname']);
         $mysqli->set_charset('utf8');
         if ($mysqli->connect_error) {
             throw new RuntimeException('Mysql Connect Error:(' . mysqli_connect_errno() . ') '. mysqli_connect_error());
@@ -63,7 +66,7 @@ class Admin {
                 info(var_export($this->request->post, true), DEBUG);
                 extract($this->request->post);
                 $createAt = $updateAt = time();
-                $hostname = '127.0.0.1';
+                $hostname = '127.0.0.1';  //todo 接收推送服务器ip
 
                 if (isset($id) && $id) {
                     $sql = 'UPDATE crontab SET name=?,command=?,schedule=?,hostname=?,updateAt=? WHERE id=?';
@@ -76,7 +79,6 @@ class Admin {
                     throw new RuntimeException('SQL syntax:' . mysqli_error($mysqli));
                 }
 
-                info($sql, DEBUG);
                 if (isset($id) && $id) {
                     $bind_param = $stmt->bind_param('ssssii', $name, $command, $schedule, $hostname, $createAt, $id);
                 } else {
@@ -90,6 +92,26 @@ class Admin {
                     info('Execute failed:' . $stmt->error, WARN);
                 }
                 $stmt->close();
+
+                //热部署，不用重启服务，会有1分钟延时
+                $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+                if ($socket === false) {
+                    info("socket_create() failed: reason: " . socket_strerror(socket_last_error()), WARN);
+                }
+                $result = socket_connect($socket, $hostname, 8100);
+                if ($result === false) {
+                    info("socket_connect() failed.\nReason: ($result) " . socket_strerror(socket_last_error($socket)), WARN);
+                }
+
+                //组织数据
+                $job = [
+                    'name' => $name,
+                    'command' => $command,
+                    'schedule' => $schedule,
+                    'hostname' => $hostname
+                ];
+                socket_write($socket, json_encode($job));
+                socket_close($socket);
                 break;
 
             default:
@@ -103,7 +125,7 @@ class Admin {
     }
 
     protected function admin($uri) {
-        $mysqli = new mysqli('127.0.0.1', 'crontab', '123456', 'test');
+        $mysqli = new mysqli($this->servConfig['mysql']['host'], $this->servConfig['mysql']['username'], $this->servConfig['mysql']['password'], $this->servConfig['mysql']['dbname']);
         $mysqli->set_charset('utf8');
         if (empty($uri)) {
             $uri = 'index';
@@ -166,7 +188,7 @@ class Admin {
         }
 
         $file = __DIR__ .'/../public/'. $uri;
-        info($file, DEBUG);
+//        info($file, DEBUG);
         if (is_file($file)) {
             # 设置缓存头信息
             $time = 86400;

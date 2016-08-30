@@ -17,7 +17,16 @@ class Server
      * @var swoole_server
      */
     public static $server;
+
+    /**
+     * @var tcp 端口
+     */
     protected $serverPort;
+
+    /**
+     * @var 服务配置
+     */
+    protected $serConfig;
 
     public function __construct()
     {
@@ -44,13 +53,12 @@ class Server
 
     public function createServer()
     {
-        $host = '0.0.0.0';
-        $port = 8000;
-
-        self::$server = new swoole_http_server($host, $port, SWOOLE_BASE);
-
+        $this->serConfig = parse_ini_file(CONFIG_FILE, true);
+        self::$server = new swoole_http_server($this->serConfig['server']['host'], $this->serConfig['server']['port'], SWOOLE_BASE);
+        //解析配置文件
+        self::$server->servConfig = $this->serConfig;
         //启用一个tcp端口
-        $this->serverPort = self::$server->listen($host, 8100, SWOOLE_SOCK_TCP);
+        $this->serverPort = self::$server->listen(self::$server->servConfig['server']['host'], self::$server->servConfig['serverPort']['port'], SWOOLE_SOCK_TCP);
 
         $config = [
             'open_eof_check' => true,
