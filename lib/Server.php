@@ -28,14 +28,30 @@ class Server
      */
     protected $serConfig;
 
+    protected static $_masterPid;
+
+    protected static $daemonize = false;
+
+    protected static $pidFile = '/var/run/php_crond.pid';
+
     public function __construct()
     {
 
     }
 
+    /**
+     * 启动服务
+     * @return bool
+     */
     public function start()
     {
 
+        if (is_file(self::$pidFile)) {
+            echo "Service already running..." . PHP_EOL;
+            return false;
+        }
+
+        echo "Service starting..." . PHP_EOL;
         $table = new swoole_table(1024);
         $table->column('name', swoole_table::TYPE_STRING, 128);
         $table->column('command', swoole_table::TYPE_STRING, 256);
@@ -51,10 +67,59 @@ class Server
         self::$server->start();
     }
 
+    /**
+     * 停止服务
+     */
+    public function stop() {
+        $pids = explode(',', file_get_contents(self::$pidFile));
+        $master_pid = $pids[0];
+        @unlink(self::$pidFile);
+        echo "Service is stopping..." . PHP_EOL;
+        // Send stop signal to master process.
+        info("masterPid:" . $master_pid, DEBUG);
+        $master_pid && posix_kill($master_pid, SIGTERM);
+        // Timeout.
+        $timeout = 5;
+        $start_time = time();
+        // Check master process is still alive?
+        while (1) {
+            $master_is_alive = self::$_masterPid && posix_kill(self::$_masterPid, 0);
+            if ($master_is_alive) {
+                // 超时?
+                if (time() - $start_time >= $timeout) {
+                    echo "Service stop fail  [fail]" . PHP_EOL;
+                    exit;
+                }
+                // Waiting amoment.
+                usleep(10000);
+                continue;
+            }
+            // Stop success.
+            echo "Service stop success  [ok]" . PHP_EOL;
+            break;
+        }
+        exit(0);
+    }
+
+    /**
+     * 重新加载配置
+     */
+    public function reload() {
+        if (!file_exists(self::$pidFile)) {
+            echo "Service not running" . PHP_EOL;
+            exit;
+        }
+        $pids = explode(',', file_get_contents(self::$pidFile));
+        // Get master process PID.
+        $manager_pid = $pids[1];
+        posix_kill($manager_pid, SIGUSR1);
+        echo "Service reload" . PHP_EOL;
+    }
+
     public function createServer()
     {
         $this->serConfig = parse_ini_file(CONFIG_FILE, true);
-        self::$server = new swoole_http_server($this->serConfig['server']['host'], $this->serConfig['server']['port'], SWOOLE_BASE);
+        self::$server = new swoole_http_server($this->serConfig['server']['host'], $this->serConfig['server']['port'], SWOOLE_PROCESS);
         //解析配置文件
         self::$server->servConfig = $this->serConfig;
         //启用一个tcp端口
@@ -74,7 +139,6 @@ class Server
 
         $this->serverPort->on('receive', function(swoole_server $server, $fd, $fromId, $data)
         {
-//            print_r($server->shareTable->get(1));
             $unpackData = json_decode($data, true);
             $server->shareTable->set(4, $unpackData);
             info('socket receive:' . $data, INFO);
@@ -85,9 +149,10 @@ class Server
             info('socket close', INFO);
         });
 
+        if ($this->serConfig['server']['daemonize']) self::$daemonize = true;
         self::$server->set([
             'worker_num' => 1,
-            'daemonize'  => false,
+            'daemonize'  => self::$daemonize,
         ]);
     }
 
@@ -113,7 +178,10 @@ class Server
 
     public function onStart(swoole_server $server)
     {
-        info('server start', DEBUG);
+        info('Service start ok', DEBUG);
+        self::$_masterPid = $server->master_pid;
+        file_put_contents(self::$pidFile, self::$_masterPid);
+        file_put_contents(self::$pidFile, ',' . $server->manager_pid, FILE_APPEND);
     }
 
     public function onShutdown(swoole_server $server)
@@ -158,7 +226,6 @@ class Server
 
         // 做任务检测
         swoole_timer_tick(1000 * 60, function() use ($crontab, $job, $server) {
-            // todo  周期性配置任务
             if ($server->shareTable) {
                 foreach ($server->shareTable as $row) {
                     $timestamp = $crontab->parse($row['schedule'], time());
@@ -175,7 +242,7 @@ class Server
                 foreach ($jobs as $job) {
                     $process = new swoole_process(function(swoole_process $worker) use ($job){
 //                            echo date('[Y-m-d H:i:s]', $job['starttime']) . 'perform Job:' . $job['name'] . PHP_EOL;
-                        info($job['name'] . ' perform Job, begin in : ' . date('Y-m-d H:i:s', $job['starttime']) , DEBUG);
+                        info($job['name'] . ' perform Job, begin in : ' . date('Y-m-d H:i:s', $job['starttime']) , INFO);
                         $worker->exit(1);
                     }, false);
                     $pid = $process->start();
@@ -190,7 +257,7 @@ class Server
 
     }
 
-    public function onManagerStart(swoole_server $server, $workerId)
+    public function onManagerStart(swoole_server $server)
     {
         global $argv;
         self::setProcessName("php ". implode(' ', $argv) ." [manager]");

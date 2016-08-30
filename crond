@@ -12,6 +12,7 @@ define('ROOT', realpath(__DIR__));
 
 $shortOpts = '';
 $shortOpts .= 'l:';   # the log path
+$shortOpts .= 's:';
 $shortOpts .= 'vhd';  # -v: debug -h: help -d: daemonize
 
 # longoption
@@ -28,11 +29,9 @@ if (empty($options)) {
 # debug
 define('IS_DEBUG',  isset($options['debug']) || isset($options['v']));
 # log
-define('LOG_PATH',  isset($options['l']) && $options['l'] ? $options['l'] : null);
+define('LOG_PATH',  isset($options['l']) && $options['l'] ? $options['l'] : '/var/log/php_crond.log');
 # config
 define('CONFIG_FILE', isset($options['c']) && $options['c'] ? $options['c'] : '/etc/crontab.ini');
-# daemon
-define('IS_DAEMON', isset($options['d']));
 # log level
 define('INFO', 1);
 define('DEBUG', 2);
@@ -48,19 +47,33 @@ if ( ! is_file(CONFIG_FILE) ) {
     }
 }
 
-//todo
+$config = parse_ini_file(CONFIG_FILE, true);
+
+define('IS_DAEMON', $config['server']['daemonize']);
+
 include './lib/Server.php';
 $server = new Server();
-$server->start();
-
-info('hello world', INFO);
+$cmdParam = isset($options['s']) && $options['s'] ? $options['s'] : null;
+switch ($cmdParam) {
+    case 'start':
+        $server->start();
+        break;
+    case 'stop':
+        $server->stop();
+        break;
+    case 'reload':
+        $server->reload();
+        break;
+    default:
+        goto help;
+}
 return true;
 
 help:
 $sbinName = basename(__FILE__);
 echo <<<EOF
     Usage: $sbinName [options]
-    -d            open daemonize mode
+    -s            start | stop | reload
     -l            the log path
     -v, --debug   open debug mode
     -h, --help    show help info
@@ -76,6 +89,8 @@ function info($info, $log_level = 1)
             $tag = 'info';
             break;
         case DEBUG:
+            //如果不是debug模式，则不记录
+            if (! IS_DEBUG) return false;
             $begin = "\x1b[34m";
             $tag = 'debug';
             break;
