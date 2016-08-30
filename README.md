@@ -12,12 +12,17 @@
 - 3. 支持秒级定时任务
 - 4. 支持任务的热部署，不用重启服务
 
-### 3.环境需求
+### 3.缺点不足
+- 1. 目前不支持多语句命令执行，e.g. cd /data/test; /usr/bin/php info.php
+- 2. 不支持进程锁，如果需要，可在程序中自行实现
+- 3. 命令必须为绝对路径，否则会exec会报 Error: No such file or directory错误
+
+### 4.环境需求
 - 1. php >= 5.4
 - 2. swoole >= 1.8.7
 - 5. mysql 任意稳定版本
 
-### 4.安装
+### 5.安装
 ```sh
 Usage: crond [options]
 -s            start | stop | reload

@@ -63,6 +63,7 @@ class Admin {
 
         switch ($uri) {
             case 'job/save':
+                $flags = 'save';  #操作标志，决定对共享内容的操作
                 info(var_export($this->request->post, true), DEBUG);
                 extract($this->request->post);
                 $createAt = $updateAt = time();
@@ -91,6 +92,9 @@ class Admin {
                 if (!$stmt->execute()) {
                     info('Execute failed:' . $stmt->error, WARN);
                 }
+
+                $insert_id = mysqli_insert_id($mysqli);
+                info('last insert id:' . $insert_id, DEBUG);
                 $stmt->close();
 
                 //热部署，不用重启服务，会有1分钟延时
@@ -105,11 +109,18 @@ class Admin {
 
                 //组织数据
                 $job = [
-                    'name' => $name,
-                    'command' => $command,
-                    'schedule' => $schedule,
-                    'hostname' => $hostname
+                    'data' => [
+                        'id' => $insert_id,
+                        'name' => $name,
+                        'command' => $command,
+                        'schedule' => $schedule,
+                        'hostname' => $hostname
+                    ],
                 ];
+                // update
+                if (empty($insert_id)) {
+                    $job['id'] = $id;
+                }
                 socket_write($socket, json_encode($job));
                 socket_close($socket);
                 break;

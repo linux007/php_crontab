@@ -36,7 +36,7 @@ class Server
 
     public function __construct()
     {
-
+        set_error_handler([$this, 'displayErrorHandler'], E_WARNING);
     }
 
     /**
@@ -71,6 +71,10 @@ class Server
      * 停止服务
      */
     public function stop() {
+        if (!file_exists(self::$pidFile)) {
+            echo "Service not running" . PHP_EOL;
+            exit;
+        }
         $pids = explode(',', file_get_contents(self::$pidFile));
         $master_pid = $pids[0];
         @unlink(self::$pidFile);
@@ -139,8 +143,18 @@ class Server
 
         $this->serverPort->on('receive', function(swoole_server $server, $fd, $fromId, $data)
         {
+            //todo
             $unpackData = json_decode($data, true);
-            $server->shareTable->set(4, $unpackData);
+            $jobData = $unpackData['data'];
+            if ( isset($unpackData['id']) ) {  # update
+                $jobId = $unpackData['id'];
+            } else {  # insert
+                $jobId = $jobData['id'];
+            }
+
+            unset($jobData['id']);
+            $server->shareTable->set($jobId, $jobData);
+
             info('socket receive:' . $data, INFO);
         });
 
@@ -235,17 +249,31 @@ class Server
         });
 
         swoole_timer_tick(1000, function() use ($workerId, $job) {
-            // todo  任务执行
             $jobs = $job->get();
 
             if ($jobs) {
                 foreach ($jobs as $job) {
                     $process = new swoole_process(function(swoole_process $worker) use ($job){
 //                            echo date('[Y-m-d H:i:s]', $job['starttime']) . 'perform Job:' . $job['name'] . PHP_EOL;
-                        info($job['name'] . ' perform Job, begin in : ' . date('Y-m-d H:i:s', $job['starttime']) , INFO);
+                        info($job['name'] . ' perform Job,' . $job['command'].' begin in : ' . date('Y-m-d H:i:s', $job['starttime']) , INFO);
+
+                        # 目前不支持多条命令语句， 只支持单条语句 e.g: /usr/bin/php  /data/test/info.php
+                        $jobData = preg_split('/\s+/i', $job['command']);
+                        $execFile = array_shift($jobData);
+                        try {
+                            $worker->exec($execFile, $jobData);
+                        } catch (Exception $e) {
+                            info('Warning:' . $e->getMessage(), WARN);
+                        }
                         $worker->exit(1);
-                    }, false);
+                    }, true);
                     $pid = $process->start();
+
+                    # 事件监听，输出重定向
+                    swoole_event_add($process->pipe, function($pipe) use ($process) {
+                        $data = $process->read();
+                        error_log($data, 3, '/tmp/debug.log');
+                    });
                 }
 
                 while ($ret = swoole_process::wait(false)) {
@@ -289,6 +317,23 @@ class Server
                 trigger_error(__METHOD__ . ' failed. require cli_set_process_title or swoole_set_process_name.');
             }
         }
+    }
+
+    /**
+     * warning 错误监听
+     * @param $error
+     * @param $error_string
+     * @param $filename
+     * @param $line
+     * @param $symbols
+     */
+    public function displayErrorHandler($errno, $errstr, $errfile, $errline, array $errcontext) {
+        if (!(error_reporting() & $errno)) {
+            // This error code is not included in error_reporting
+            return;
+        }
+
+        throw new ErrorException($errstr, 0, $errno, $errfile, $errline);
     }
 
 
