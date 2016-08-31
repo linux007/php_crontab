@@ -274,14 +274,14 @@ class Server
                             info('Warning:' . $e->getMessage(), WARN);
                         }
                         $worker->exit(1);
-                    }, true);
+                    }, false);
                     $pid = $process->start();
 
                     # 事件监听，输出重定向
-                    swoole_event_add($process->pipe, function($pipe) use ($process) {
-                        $data = $process->read();
-                        error_log($data, 3, '/tmp/debug.log');
-                    });
+//                    swoole_event_add($process->pipe, function($pipe) use ($process) {
+//                        $data = $process->read();
+//                        error_log($data, 3, '/tmp/debug.log');
+//                    });
                 }
 
                 while ($ret = swoole_process::wait(false)) {
