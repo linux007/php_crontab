@@ -22,7 +22,8 @@ function messageBox(body, title, ok_text, close_text, callback){
 function deleteJob(_id){
 	// TODO fix this. pass callback properly
 	messageBox("<p> Do you want to delete this Job? </p>", "Confirm delete", null, null, function(){
-		$.post(routes.remove, {_id: _id}, function(){
+		hostname = $('#'+_id).children("td:eq(4)").html();
+		$.post('/api/job/delete', {id: _id, hostname: hostname}, function(){
 			location.reload();
 		});
 	});

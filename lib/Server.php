@@ -143,17 +143,25 @@ class Server
 
         $this->serverPort->on('receive', function(swoole_server $server, $fd, $fromId, $data)
         {
-            //todo
+            //todo  增加回调，返回值
             $unpackData = json_decode($data, true);
-            $jobData = $unpackData['data'];
-            if ( isset($unpackData['id']) ) {  # update
-                $jobId = $unpackData['id'];
-            } else {  # insert
-                $jobId = $jobData['id'];
-            }
+            $flags = isset($unpackData['flags']) ? $unpackData['flags'] : null;
+            switch ($flags) {
+                case 'delete':
+                    $jobData = $unpackData['data'];
+                    $server->shareTable->del($jobData['id']);
+                    break;
+                default:
+                    $jobData = $unpackData['data'];
+                    if ( isset($unpackData['id']) ) {  # update
+                        $jobId = $unpackData['id'];
+                    } else {  # insert
+                        $jobId = $jobData['id'];
+                    }
 
-            unset($jobData['id']);
-            $server->shareTable->set($jobId, $jobData);
+                    unset($jobData['id']);
+                    $server->shareTable->set($jobId, $jobData);
+            }
 
             info('socket receive:' . $data, INFO);
         });

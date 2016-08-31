@@ -61,11 +61,11 @@ class Admin {
             throw new RuntimeException('Mysql Connect Error:(' . mysqli_connect_errno() . ') '. mysqli_connect_error());
         }
 
+        info(var_export($this->request->post, true), DEBUG);
+        extract($this->request->post);
+
         switch ($uri) {
             case 'job/save':
-                $flags = 'save';  #操作标志，决定对共享内容的操作
-                info(var_export($this->request->post, true), DEBUG);
-                extract($this->request->post);
                 $createAt = $updateAt = time();
                 $hostname = '127.0.0.1';  //todo 接收推送服务器ip
 
@@ -124,7 +124,33 @@ class Admin {
                 socket_write($socket, json_encode($job));
                 socket_close($socket);
                 break;
+            case 'job/delete':
+                if (empty($id)) {
+                    return false;
+                }
+                $sql = 'DELETE FROM crontab WHERE id=' . $id;
+                $mysqli->query($sql);
 
+                //操作通知
+                $socket = socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+                if ($socket === false) {
+                    info("socket_create() failed: reason: " . socket_strerror(socket_last_error()), WARN);
+                }
+                $result = socket_connect($socket, $hostname, 8100);
+                if ($result === false) {
+                    info("socket_connect() failed.\nReason: ($result) " . socket_strerror(socket_last_error($socket)), WARN);
+                }
+
+                //组织数据
+                $job = [
+                    'flags' => 'delete',
+                    'data' => [
+                        'id' => $id,
+                    ]
+                ];
+                socket_write($socket, json_encode($job));
+                socket_close($socket);
+                break;
             default:
                 $this->response->status(404);
                 $this->response->end('not found');

@@ -25,7 +25,7 @@
         </div>
         <table class="table table-striped">
             <thead>
-            <th>#</th><th>Name</th><th>Job</th><th>Timer</th><th>Last Modified</th><th></th>
+            <th>#</th><th>Name</th><th>Job</th><th>Timer</th><th>Hostname</th><th>Last Modified</th><th></th>
             </thead>
             <?php if ($dataList): ?>
             <?php foreach ($dataList as $row): ?>
@@ -34,12 +34,13 @@
                 <td label="name"><?= $row['name'] ?></td>
                 <td label="command"><?= $row['command'] ?></td>
                 <td label="schedule"><?= $row['schedule'] ?></td>
+                <td label="schedule"><?= $row['hostname'] ?></td>
                 <td label="updateAt"><?= date('Y-m-d H:i:s', $row['updateAt']) ?></td>
                 <td>
                     <a class="btn btn-primary" onclick='editJob(<?=$row['id'] ?>)'><span class="glyphicon glyphicon-edit" aria-hidden="true"></span></a>
                     <!--<a class="btn btn-info"><span class="glyphicon glyphicon-stop" aria-hidden="true"></span> Stop</a>-->
                     <!--<a class="btn btn-info"><span class="glyphicon glyphicon-play" aria-hidden="true"></span> Start</a>-->
-                    <a class="btn btn-danger"><span class="glyphicon glyphicon-trash" aria-hidden="true"></span></a>
+                    <a class="btn btn-danger" onclick="deleteJob(<?=$row['id'] ?>)"><span class="glyphicon glyphicon-trash" aria-hidden="true"></span></a>
                 </td>
             </tr>
             <?php endforeach; ?>
