@@ -98,11 +98,9 @@
                     <div class="row">
                         <div class="col-md-12">
                         <select class="form-control" id='job-name'>
-                            <option>127.0.0.1</option>
-                            <option>2</option>
-                            <option>3</option>
-                            <option>4</option>
-                            <option>5</option>
+                            <?php foreach ($config['host']['hostname'] as $val): ?>
+                            <option><?=$val ?></option>
+                            <?php endforeach; ?>
                         </select>
                         </div>
                     </div><br />

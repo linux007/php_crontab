@@ -175,6 +175,7 @@ class Admin {
             return false;
         }
         $dataList = [];
+        $config = $this->servConfig;
 
         ob_start();
         $sql = 'SELECT * FROM crontab';
