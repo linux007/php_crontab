@@ -37,6 +37,8 @@ php crond -s [start|stop|reload]
 2. http默认端口8000, Server默认端口8100
 3. 管理界面访问: localhost:8000/admin
 
+![管理界面](https://github.com/linux007/php_crontab/blob/master/screenshots/list.png)
+![添加修改](https://github.com/linux007/php_crontab/blob/master/screenshots/detail.png)
 ### 感谢
 感谢[@Suresh Alse](https://github.com/alseambusher/crontab-ui) 提供的ui
 
