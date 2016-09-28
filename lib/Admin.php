@@ -67,7 +67,7 @@ class Admin {
         switch ($uri) {
             case 'job/save':
                 $createAt = $updateAt = time();
-                $hostname = '127.0.0.1';  //todo 接收推送服务器ip
+//                $hostname = $host;  //todo 接收推送服务器ip
 
                 if (isset($id) && $id) {
                     $sql = 'UPDATE crontab SET name=?,command=?,schedule=?,hostname=?,updateAt=? WHERE id=?';
@@ -174,8 +174,14 @@ class Admin {
             $this->response->end('not found');
             return false;
         }
-        $dataList = [];
-        $config = $this->servConfig;
+        $dataList = $serverHost = [];
+        if ( isset($this->servConfig['network']['broadcast']) && $this->servConfig['network']['broadcast']) {
+            $hostInit = '/dev/shm/crondispatch';
+            $ipConfig = file_get_contents($hostInit);
+            $serverHost = explode("\r\n", $ipConfig);
+        } else {
+            $serverHost = $this->servConfig['host']['hostname'];
+        }
 
         ob_start();
         $sql = 'SELECT * FROM crontab';

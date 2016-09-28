@@ -96,7 +96,7 @@ function editJob(_id){
 
 	$("#job-save").unbind("click"); // remove existing events attached to this
 	$("#job-save").click(function(){
-		$.post('/api/job/save', {name: $("#job-name").val(), command: $('#job-command').val() , schedule: schedule, id: _id}, function(){
+		$.post('/api/job/save', {name: $("#job-name").val(), command: $('#job-command').val() , hostname: $('#job-host').val(), schedule: schedule, id: _id}, function(){
 			location.reload();
 		})
 		console.log('save');
@@ -119,7 +119,7 @@ function newJob(){
 	$("#job-save").unbind("click"); // remove existing events attached to this
 	$("#job-save").click(function(){
 		// TODO good old boring validations
-		$.post('/api/job/save', {name: $("#job-name").val(), command: job_command , schedule: schedule, _id: -1, logging: $("#job-logging").prop("checked")}, function(){
+		$.post('/api/job/save', {name: $("#job-name").val(), command: job_command , hostname: $('#job-host').val(), schedule: schedule, _id: -1, logging: $("#job-logging").prop("checked")}, function(){
 			location.reload();
 		})
 	});

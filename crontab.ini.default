@@ -7,6 +7,10 @@ daemonize = true
 [serverPort]
 port = 8100
 
+[network]
+broadcast = true
+bindport = 8251
+
 [mysql]
 host = 127.0.0.1
 port = 3306

@@ -9,6 +9,7 @@
 include __DIR__ . '/CrontabParse.php';
 include __DIR__ . '/Job.php';
 include __DIR__ . '/Admin.php';
+include __DIR__ . '/Socket.php';
 
 class Server
 {
@@ -22,6 +23,11 @@ class Server
      * @var tcp 端口
      */
     protected $serverPort;
+
+    /**
+     * @var udp port
+     */
+    protected $broadcastPort;
 
     /**
      * @var 服务配置
@@ -129,6 +135,10 @@ class Server
         //启用一个tcp端口
         $this->serverPort = self::$server->listen(self::$server->servConfig['server']['host'], self::$server->servConfig['serverPort']['port'], SWOOLE_SOCK_TCP);
 
+        if ($this->serConfig['network']['broadcast']) {
+            $this->broadcastPort = self::$server->listen('0.0.0.0', self::$server->servConfig['network']['bindport'], SWOOLE_SOCK_UDP);
+        }
+
         $config = [
             'open_eof_check' => true,
             'open_eof_split' => false,
@@ -136,6 +146,7 @@ class Server
         ];
         $this->serverPort->set($config);
 
+        /*
         $this->serverPort->on('connect', function (swoole_server $server, $fd, $fromId)
         {
             info('socket connect', INFO);
@@ -150,6 +161,15 @@ class Server
                 case 'delete':
                     $jobData = $unpackData['data'];
                     $server->shareTable->del($jobData['id']);
+                    break;
+                case 'dispatch':
+                    info('dispatch data:'. var_export($unpackData, true), INFO);
+                    $ipConfig = file_get_contents('/dev/shm/crondispatch');
+                    $ipConfig = explode("\r\n", $ipConfig);
+                    $ipConfig = array_unique(array_merge($ipConfig, $unpackData['data']));
+                    $ipConfig = implode("\r\n", $ipConfig);
+                    file_put_contents('/dev/shm/crondispatch', $ipConfig);
+                    unset($ipConfig);
                     break;
                 default:
                     $jobData = $unpackData['data'];
@@ -170,30 +190,29 @@ class Server
         {
             info('socket close', INFO);
         });
+        */
 
         if ($this->serConfig['server']['daemonize']) self::$daemonize = true;
         self::$server->set([
-            'worker_num' => 1,
+            'worker_num' => 2,
             'daemonize'  => self::$daemonize,
         ]);
     }
 
     protected function bind()
     {
-//        self::$server->on('Start', [$this, 'onStart']);
-//        self::$server->on('Shutdown', [$this, 'onShutdown']);
-//        self::$server->on('WorkerStart', [$this, 'onWorkerStart']);
-//        self::$server->on('ManagerStart', [$this, 'onManagerStart']);
-//        self::$server->on('ManagerStop', [$this, 'onManagerStop']);
 
         self::$server->on('Start', [$this, 'onStart']);
         self::$server->on('Shutdown', [$this, 'onShutdown']);
-
         self::$server->on('WorkerStart', [$this, 'onWorkerStart']);
+        self::$server->on('receive', [$this, 'onReceive']);
         self::$server->on('ManagerStart', [$this, 'onManagerStart']);
         self::$server->on('ManagerStop', [$this, 'onManagerStop']);
-
         self::$server->on('Request', [$this, 'onManagerRequest']);
+
+        if (self::$server->servConfig['network']['broadcast']) {
+            self::$server->on('Packet', [$this, 'onUdpPacket']);
+        }
 
         return $this;
     }
@@ -221,76 +240,125 @@ class Server
 //        swoole_timer_tick(1000, function() use ($workerId) {
 //            info("[worker#{$workerId}]- timer", DEBUG);
 //        });
-        $crontab = new CrontabParse();
-        $job = Job::factory();
+
         $this->manager = new Admin($server, $workerId);
 
-        $mysqli = new mysqli('127.0.0.1', 'crontab', '123456', 'test');
-        $mysqli->set_charset('utf8');
-        if ($mysqli->connect_error) {
-            throw new RuntimeException('Mysql Connect Error:(' . mysqli_connect_errno() . ') '. mysqli_connect_error());
-        }
-
-        $sql = 'SELECT id,name,command,schedule,hostname FROM crontab';
-        $result = $mysqli->query($sql);
-        if ($result) {
-            while ($row = $result->fetch_array(MYSQLI_ASSOC)) {
-                $server->shareTable->set($row['id'], [
-                    'name' => $row['name'],
-                    'command' => $row['command'],
-                    'schedule' => $row['schedule'],
-                    'hostname' => $row['hostname']
-                ]);
-                $timestamp = $crontab->parse($row['schedule'], time());
-                $job->set($timestamp, $row);
+        if ($workerId == (self::$server->setting['worker_num'] - 1)) {
+            # timer
+            if ($this->serConfig['network']['broadcast']) {
+                swoole_timer_tick(1000 * 5, function() {
+                    info('broadcast#', DEBUG);
+                    $udpPort = new UdpDispach();
+                    $udpPort->send();
+                });
             }
-        }
+        } else {
+            $crontab       = new CrontabParse();
+            $job           = Job::factory();
 
-        // 做任务检测
-        swoole_timer_tick(1000 * 60, function() use ($crontab, $job, $server) {
-            if ($server->shareTable) {
-                foreach ($server->shareTable as $row) {
+            $mysqli = new mysqli('127.0.0.1', 'crontab', '123456', 'test');
+            $mysqli->set_charset('utf8');
+            if ($mysqli->connect_error) {
+                throw new RuntimeException('Mysql Connect Error:(' . mysqli_connect_errno() . ') ' . mysqli_connect_error());
+            }
+
+            $sql    = 'SELECT id,name,command,schedule,hostname FROM crontab';
+            $result = $mysqli->query($sql);
+            if ($result) {
+                while ($row = $result->fetch_array(MYSQLI_ASSOC)) {
+                    $server->shareTable->set($row['id'], [
+                        'name'     => $row['name'],
+                        'command'  => $row['command'],
+                        'schedule' => $row['schedule'],
+                        'hostname' => $row['hostname']
+                    ]);
                     $timestamp = $crontab->parse($row['schedule'], time());
                     $job->set($timestamp, $row);
                 }
             }
-        });
 
-        swoole_timer_tick(1000, function() use ($workerId, $job) {
-            $jobs = $job->get();
+            // 做任务检测
+            swoole_timer_tick(1000 * 60, function () use ($crontab, $job, $server) {
+                if ($server->shareTable) {
+                    foreach ($server->shareTable as $row) {
+                        $timestamp = $crontab->parse($row['schedule'], time());
+                        $job->set($timestamp, $row);
+                    }
+                }
+            });
 
-            if ($jobs) {
-                foreach ($jobs as $job) {
-                    $process = new swoole_process(function(swoole_process $worker) use ($job){
+            swoole_timer_tick(1000, function () use ($workerId, $job) {
+                $jobs = $job->get();
+                if ($jobs) {
+                    foreach ($jobs as $job) {
+                        $process = new swoole_process(function (swoole_process $worker) use ($job) {
 //                            echo date('[Y-m-d H:i:s]', $job['starttime']) . 'perform Job:' . $job['name'] . PHP_EOL;
-                        info($job['name'] . ' perform Job,' . $job['command'].' begin in : ' . date('Y-m-d H:i:s', $job['starttime']) , INFO);
+                            info($job['name'] . ' perform Job,' . $job['command'] . ' begin in : ' . date('Y-m-d H:i:s', $job['starttime']), INFO);
 
-                        # 目前不支持多条命令语句， 只支持单条语句 e.g: /usr/bin/php  /data/test/info.php
-                        $jobData = preg_split('/\s+/i', $job['command']);
-                        $execFile = array_shift($jobData);
-                        try {
-                            $worker->exec($execFile, $jobData);
-                        } catch (Exception $e) {
-                            info('Warning:' . $e->getMessage(), WARN);
-                        }
-                        $worker->exit(1);
-                    }, false);
-                    $pid = $process->start();
+                            # 目前不支持多条命令语句， 只支持单条语句 e.g: /usr/bin/php  /data/test/info.php
+                            $jobData  = preg_split('/\s+/i', $job['command']);
+                            $execFile = array_shift($jobData);
+                            try {
+                                $worker->exec($execFile, $jobData);
+                            } catch (Exception $e) {
+                                info('Warning:' . $e->getMessage(), WARN);
+                            }
+                            $worker->exit(1);
+                        }, false);
+                        $pid     = $process->start();
 
-                    # 事件监听，输出重定向
+                        # 事件监听，输出重定向
 //                    swoole_event_add($process->pipe, function($pipe) use ($process) {
 //                        $data = $process->read();
 //                        error_log($data, 3, '/tmp/debug.log');
 //                    });
-                }
+                    }
 
-                while ($ret = swoole_process::wait(false)) {
-                    echo "PID={$ret['pid']}\n";
+                    while ($ret = swoole_process::wait(false)) {
+                        echo "PID={$ret['pid']}\n";
+                    }
                 }
-            }
 //                info("[worker#{$workerId}]- timer", DEBUG);
-        });
+            });
+        }
+    }
 
+    public function onUdpPacket(swoole_server $server, $data, $client_info) {
+        info('udp receive:' . var_export($client_info, true), DEBUG);
+        $file = '/dev/shm/crondispatch';
+        if ( ! file_exists($file) ) {
+            @touch($file);
+        }
+
+        $ipConfig = file_get_contents($file);
+        $ipConfig = explode("\r\n", $ipConfig);
+        $ipConfig = array_unique(array_merge([$client_info['address']], $ipConfig));
+        $ipConfig = implode("\r\n", $ipConfig);
+        file_put_contents($file, $ipConfig);
+        unset($ipConfig);
+    }
+
+    public function onReceive(swoole_server $server, $fd, $from_id, $data) {
+        $unpackData = json_decode($data, true);
+        $flags = isset($unpackData['flags']) ? $unpackData['flags'] : null;
+        switch ($flags) {
+            case 'delete':
+                $jobData = $unpackData['data'];
+                $server->shareTable->del($jobData['id']);
+                break;
+            default:
+                $jobData = $unpackData['data'];
+                if ( isset($unpackData['id']) ) {  # update
+                    $jobId = $unpackData['id'];
+                } else {  # insert
+                    $jobId = $jobData['id'];
+                }
+
+                unset($jobData['id']);
+                $server->shareTable->set($jobId, $jobData);
+        }
+
+        info('server receive:' . $data, INFO);
     }
 
     public function onManagerStart(swoole_server $server)

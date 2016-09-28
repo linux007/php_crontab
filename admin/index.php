@@ -97,8 +97,8 @@
                     <label>HostName</label>
                     <div class="row">
                         <div class="col-md-12">
-                        <select class="form-control" id='job-name'>
-                            <?php foreach ($config['host']['hostname'] as $val): ?>
+                        <select class="form-control" id='job-host'>
+                            <?php foreach ($serverHost as $val): ?>
                             <option><?=$val ?></option>
                             <?php endforeach; ?>
                         </select>
